@@ -622,12 +622,16 @@ function loadRooms() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch(e){ return {}; }
 }
 function saveRooms(rooms) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(rooms));
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(rooms)); } catch(e){}
 }
-function getRoom(code) { return loadRooms()[code] || null; }
+function getRoom(code) {
+  if (!code) return null;
+  return loadRooms()[code] || null;
+}
 function setRoom(code, data) {
+  // Read fresh copy first to avoid overwriting concurrent changes
   const rooms = loadRooms();
-  rooms[code] = data;
+  rooms[code] = {...(rooms[code]||{}), ...data};
   saveRooms(rooms);
 }
 
@@ -690,27 +694,38 @@ function joinRoom() {
   if (!name) return shake('join-name');
   if (code.length !== 6) return shake('join-code');
 
-  const room = getRoom(code);
-  if (!room) return alert('Room not found. Check the code and try again.');
-  if (room.guestJoined) return alert('This room already has two players.');
+  // Retry up to 5 times with 600ms gap (handles localStorage timing lag)
+  let attempts = 0;
+  const tryJoin = () => {
+    attempts++;
+    const room = getRoom(code);
+    if (!room) {
+      if (attempts < 5) { setTimeout(tryJoin, 600); return; }
+      alert('Room not found. Make sure the code is correct and the host has created the room.');
+      return;
+    }
+    if (room.guestJoined && room.guestName !== name) {
+      alert('This room already has two players.');
+      return;
+    }
 
-  room.guestName = name;
-  room.guestJoined = true;
-  setRoom(code, room);
+    room.guestName = name;
+    room.guestJoined = true;
+    setRoom(code, room);
 
-  state.currentRoom = code;
-  state.currentRole = 'guest';
-  state.myPlayerIndex = 2;
-  game.p2.name = name;
-  game.p1.name = room.hostName;
-  game.range = {min: room.min, max: room.max};
+    state.currentRoom = code;
+    state.currentRole = 'guest';
+    state.myPlayerIndex = 2;
+    game.p2.name = name;
+    game.p1.name = room.hostName;
+    game.range = {min: room.min, max: room.max};
 
-  document.getElementById('jw-host-name').textContent = room.hostName;
-  document.getElementById('jw-range').textContent = `${room.min} – ${room.max}`;
-  showScreen('joined-waiting-screen');
-
-  // Poll for game start
-  startPolling('joined-waiting', code);
+    document.getElementById('jw-host-name').textContent = room.hostName;
+    document.getElementById('jw-range').textContent = `${room.min} – ${room.max}`;
+    showScreen('joined-waiting-screen');
+    startPolling('joined-waiting', code);
+  };
+  tryJoin();
 }
 
 // ══════════════════════════════════════════════
@@ -927,8 +942,8 @@ function submitGuess() {
 
   let result = '';
   if (guess === opponentSecret) result = 'win';
-  else if (guess > opponentSecret) result = 'high';
-  else result = 'low';
+  else if (guess > opponentSecret) result = 'low';   // guess too high → secret is lower
+  else result = 'high';                               // guess too low  → secret is higher
 
   room[guesserKey] = room[guesserKey] || [];
   room[guesserKey].push({num: guess, result});
