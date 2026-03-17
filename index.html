@@ -5,399 +5,229 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NumDuel — Live Multiplayer Guessing Game</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- PeerJS for real P2P multiplayer -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   :root {
-    --bg: #050a14;
-    --bg2: #0a1628;
-    --panel: #0d1f3c;
-    --border: #1a3a6b;
-    --accent: #00d4ff;
-    --accent2: #7b2fff;
-    --gold: #ffd700;
-    --red: #ff2d55;
-    --green: #00ff88;
-    --text: #e8f4ff;
-    --muted: #4a7ab5;
+    --bg: #050a14; --bg2: #0a1628; --panel: #0d1f3c; --border: #1a3a6b;
+    --accent: #00d4ff; --accent2: #7b2fff; --gold: #ffd700;
+    --red: #ff2d55; --green: #00ff88; --text: #e8f4ff; --muted: #4a7ab5;
     --glow: 0 0 20px rgba(0,212,255,0.4);
-    --glow2: 0 0 30px rgba(123,47,255,0.5);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Rajdhani',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; position:relative; }
 
-  body {
-    font-family: 'Rajdhani', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-    position: relative;
-  }
+  #bg-canvas { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; opacity:0.18; }
 
-  /* ── Background number rain ── */
-  #bg-canvas {
-    position: fixed; top:0; left:0; width:100%; height:100%;
-    pointer-events: none; z-index: 0; opacity: 0.18;
-  }
-
-
-
-  /* ── Main container ── */
-  #app {
-    position: relative; z-index: 1;
-    min-height: 100vh;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 20px;
-  }
+  #app { position:relative; z-index:1; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; }
 
   .logo {
-    font-family: 'Orbitron', monospace;
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    font-weight: 900;
-    background: linear-gradient(135deg, var(--accent), var(--accent2), var(--gold));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    text-shadow: none;
-    letter-spacing: 4px;
-    margin-bottom: 6px;
-    animation: logoPulse 3s ease-in-out infinite;
+    font-family:'Orbitron',monospace; font-size:clamp(2rem,5vw,3.5rem); font-weight:900;
+    background:linear-gradient(135deg,var(--accent),var(--accent2),var(--gold));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    letter-spacing:4px; margin-bottom:6px; animation:logoPulse 3s ease-in-out infinite;
   }
-  @keyframes logoPulse {
-    0%,100% { filter: brightness(1); }
-    50% { filter: brightness(1.3); }
-  }
-  .tagline {
-    font-family: 'Space Mono', monospace;
-    font-size: 11px; color: var(--muted); letter-spacing: 3px;
-    margin-bottom: 40px; text-transform: uppercase;
-  }
+  @keyframes logoPulse { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.3)} }
+  .tagline { font-family:'Space Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:3px; margin-bottom:40px; text-transform:uppercase; }
 
-  /* ── Screen system ── */
-  .screen { display: none; width: 100%; max-width: 520px; }
-  .screen.active { display: block; animation: screenIn 0.4s ease; }
-  @keyframes screenIn {
-    from { opacity:0; transform: translateY(20px); }
-    to   { opacity:1; transform: translateY(0); }
-  }
+  .screen { display:none; width:100%; max-width:520px; }
+  .screen.active { display:block; animation:screenIn .4s ease; }
+  @keyframes screenIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
 
-  /* ── Card ── */
   .card {
-    background: linear-gradient(135deg, rgba(13,31,60,0.95), rgba(10,22,40,0.98));
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 36px 32px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
-    position: relative; overflow: hidden;
+    background:linear-gradient(135deg,rgba(13,31,60,.95),rgba(10,22,40,.98));
+    border:1px solid var(--border); border-radius:20px; padding:36px 32px;
+    box-shadow:0 8px 40px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);
+    position:relative; overflow:hidden;
   }
-  .card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:2px;
-    background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
-  }
+  .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent),var(--accent2),transparent); }
 
-  .card-title {
-    font-family: 'Orbitron', monospace; font-size: 1.1rem;
-    color: var(--accent); letter-spacing: 3px; margin-bottom: 28px;
-    text-transform: uppercase;
-  }
+  .card-title { font-family:'Orbitron',monospace; font-size:1.1rem; color:var(--accent); letter-spacing:3px; margin-bottom:28px; text-transform:uppercase; }
 
-  /* ── Inputs ── */
-  .input-group { margin-bottom: 18px; }
-  .input-group label {
-    display: block; font-size: 12px; color: var(--muted);
-    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
-    font-family: 'Space Mono', monospace;
-  }
+  .input-group { margin-bottom:18px; }
+  .input-group label { display:block; font-size:12px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; font-family:'Space Mono',monospace; }
   input[type="text"], input[type="number"] {
-    width: 100%; padding: 14px 18px;
-    background: rgba(0,0,0,0.4); border: 1px solid var(--border);
-    border-radius: 10px; color: var(--text); font-family: 'Rajdhani', sans-serif;
-    font-size: 1.1rem; font-weight: 600; outline: none;
-    transition: all 0.3s;
+    width:100%; padding:14px 18px; background:rgba(0,0,0,.4); border:1px solid var(--border);
+    border-radius:10px; color:var(--text); font-family:'Rajdhani',sans-serif;
+    font-size:1.1rem; font-weight:600; outline:none; transition:all .3s;
   }
-  input:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,212,255,0.2); }
-  input::placeholder { color: var(--muted); }
+  input:focus { border-color:var(--accent); box-shadow:0 0 15px rgba(0,212,255,.2); }
+  input::placeholder { color:var(--muted); }
+  input:disabled { opacity:.5; cursor:not-allowed; }
+  .range-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 
-  .range-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .btn { width:100%; padding:16px; border:none; border-radius:12px; font-family:'Orbitron',monospace; font-size:.85rem; font-weight:700; letter-spacing:2px; cursor:pointer; transition:all .3s; text-transform:uppercase; margin-top:8px; }
+  .btn:disabled { opacity:.35; cursor:not-allowed; pointer-events:none; }
+  .btn-primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; box-shadow:0 4px 20px rgba(0,212,255,.3); }
+  .btn-primary:hover { transform:translateY(-2px); box-shadow:0 6px 30px rgba(0,212,255,.5); }
+  .btn-secondary { background:transparent; border:1px solid var(--border); color:var(--muted); margin-top:12px; }
+  .btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-gold { background:linear-gradient(135deg,#b8860b,var(--gold),#b8860b); color:#000; font-weight:900; box-shadow:0 4px 20px rgba(255,215,0,.4); }
+  .btn-gold:hover { box-shadow:0 6px 35px rgba(255,215,0,.7); transform:translateY(-2px); }
 
-  /* ── Buttons ── */
-  .btn {
-    width: 100%; padding: 16px; border: none; border-radius: 12px;
-    font-family: 'Orbitron', monospace; font-size: 0.85rem; font-weight: 700;
-    letter-spacing: 2px; cursor: pointer; transition: all 0.3s;
-    text-transform: uppercase; margin-top: 8px;
-  }
-  .btn-primary {
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    color: #fff; box-shadow: 0 4px 20px rgba(0,212,255,0.3);
-  }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(0,212,255,0.5); }
-  .btn-primary:active { transform: translateY(0); }
+  .home-btns { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+  .home-card-btn { background:linear-gradient(135deg,rgba(13,31,60,.95),rgba(10,22,40,.98)); border:1px solid var(--border); border-radius:16px; padding:36px 20px; text-align:center; cursor:pointer; transition:all .3s; position:relative; overflow:hidden; }
+  .home-card-btn:hover { border-color:var(--accent); transform:translateY(-4px); box-shadow:var(--glow); }
+  .home-card-btn .hcb-icon { font-size:2.5rem; margin-bottom:12px; }
+  .home-card-btn .hcb-title { font-family:'Orbitron',monospace; font-size:.85rem; color:var(--accent); letter-spacing:2px; }
+  .home-card-btn .hcb-desc { font-size:.82rem; color:var(--muted); margin-top:6px; }
 
-  .btn-secondary {
-    background: transparent; border: 1px solid var(--border);
-    color: var(--muted); margin-top: 12px;
-  }
-  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .code-box { background:rgba(0,0,0,.5); border:1px solid var(--accent); border-radius:12px; padding:20px; text-align:center; margin:20px 0; box-shadow:var(--glow); }
+  .code-box .code-label { font-size:11px; color:var(--muted); letter-spacing:2px; margin-bottom:10px; font-family:'Space Mono',monospace; }
+  .code-box .code-value { font-family:'Orbitron',monospace; font-size:2.2rem; font-weight:900; color:var(--accent); letter-spacing:8px; animation:codePulse 2s ease-in-out infinite; }
+  @keyframes codePulse { 0%,100%{text-shadow:0 0 10px var(--accent)} 50%{text-shadow:0 0 30px var(--accent),0 0 60px var(--accent)} }
 
-  .btn-gold {
-    background: linear-gradient(135deg, #b8860b, var(--gold), #b8860b);
-    color: #000; font-weight: 900; box-shadow: 0 4px 20px rgba(255,215,0,0.4);
-  }
-  .btn-gold:hover { box-shadow: 0 6px 35px rgba(255,215,0,0.7); transform: translateY(-2px); }
-
-  /* ── Home screen two big buttons ── */
-  .home-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
-  .home-card-btn {
-    background: linear-gradient(135deg, rgba(13,31,60,0.95), rgba(10,22,40,0.98));
-    border: 1px solid var(--border); border-radius: 16px;
-    padding: 36px 20px; text-align: center; cursor: pointer;
-    transition: all 0.3s; position: relative; overflow: hidden;
-  }
-  .home-card-btn:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: var(--glow); }
-  .home-card-btn .hcb-icon { font-size: 2.5rem; margin-bottom: 12px; }
-  .home-card-btn .hcb-title {
-    font-family: 'Orbitron', monospace; font-size: 0.85rem;
-    color: var(--accent); letter-spacing: 2px;
-  }
-  .home-card-btn .hcb-desc { font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
-
-  /* ── Room code display ── */
-  .code-box {
-    background: rgba(0,0,0,0.5); border: 1px solid var(--accent);
-    border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;
-    box-shadow: var(--glow);
-  }
-  .code-box .code-label { font-size: 11px; color: var(--muted); letter-spacing: 2px; margin-bottom: 10px; font-family:'Space Mono',monospace; }
-  .code-box .code-value {
-    font-family: 'Orbitron', monospace; font-size: 2.2rem; font-weight: 900;
-    color: var(--accent); letter-spacing: 8px;
-    animation: codePulse 2s ease-in-out infinite;
-  }
-  @keyframes codePulse {
-    0%,100% { text-shadow: 0 0 10px var(--accent); }
-    50% { text-shadow: 0 0 30px var(--accent), 0 0 60px var(--accent); }
-  }
-  .waiting-dot {
-    display: inline-block; width:8px; height:8px; border-radius:50%;
-    background: var(--accent); margin: 0 3px;
-    animation: wdot 1.4s ease-in-out infinite;
-  }
-  .waiting-dot:nth-child(2) { animation-delay:.2s; }
-  .waiting-dot:nth-child(3) { animation-delay:.4s; }
+  .waiting-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin:0 3px; animation:wdot 1.4s ease-in-out infinite; }
+  .waiting-dot:nth-child(2){animation-delay:.2s} .waiting-dot:nth-child(3){animation-delay:.4s}
   @keyframes wdot { 0%,100%{opacity:.2;transform:scale(1)} 50%{opacity:1;transform:scale(1.4)} }
 
-  /* ── Game screen ── */
-  #game-screen { max-width: 900px; }
+  /* Status box */
+  .status-box { display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:10px; background:rgba(0,212,255,.05); border:1px solid rgba(0,212,255,.2); font-family:'Space Mono',monospace; font-size:12px; color:var(--accent); margin-bottom:14px; letter-spacing:1px; }
+  .status-box .spin-sm { width:14px; height:14px; border:2px solid rgba(0,212,255,.2); border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; flex-shrink:0; }
+  @keyframes sp { to{transform:rotate(360deg)} }
+  .status-box.err { background:rgba(255,45,85,.07); border-color:rgba(255,45,85,.3); color:var(--red); }
 
-  .game-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 24px; padding: 0 4px;
-  }
+  #game-screen { max-width:900px; }
+  .game-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; padding:0 4px; }
   .game-title { font-family:'Orbitron',monospace; font-size:1rem; color:var(--muted); letter-spacing:3px; }
-  .range-badge {
-    background: rgba(0,212,255,0.1); border:1px solid var(--border);
-    border-radius:20px; padding:6px 16px;
-    font-family:'Space Mono',monospace; font-size:12px; color:var(--accent);
-  }
-  .turn-indicator {
-    font-family:'Orbitron',monospace; font-size:12px; letter-spacing:2px;
-    padding:6px 16px; border-radius:20px; background:rgba(123,47,255,0.2);
-    border:1px solid var(--accent2); color:var(--accent2);
-    animation: turnPulse 1.5s ease-in-out infinite;
-  }
-  @keyframes turnPulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
+  .range-badge { background:rgba(0,212,255,.1); border:1px solid var(--border); border-radius:20px; padding:6px 16px; font-family:'Space Mono',monospace; font-size:12px; color:var(--accent); }
+  .turn-indicator { font-family:'Orbitron',monospace; font-size:12px; letter-spacing:2px; padding:6px 16px; border-radius:20px; background:rgba(123,47,255,.2); border:1px solid var(--accent2); color:var(--accent2); animation:turnPulse 1.5s ease-in-out infinite; }
+  @keyframes turnPulse { 0%,100%{opacity:.7} 50%{opacity:1} }
 
-  .players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .players-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+  .player-panel { background:linear-gradient(135deg,rgba(13,31,60,.95),rgba(10,22,40,.98)); border:1px solid var(--border); border-radius:16px; padding:22px; position:relative; overflow:hidden; transition:all .3s; }
+  .player-panel.active-turn { border-color:var(--accent); box-shadow:0 0 25px rgba(0,212,255,.3),inset 0 0 30px rgba(0,212,255,.05); }
+  .player-panel::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent2),transparent); }
+  .player-panel.active-turn::before { background:linear-gradient(90deg,transparent,var(--accent),transparent); animation:scanLine 2s linear infinite; }
+  @keyframes scanLine { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
 
-  .player-panel {
-    background: linear-gradient(135deg, rgba(13,31,60,0.95), rgba(10,22,40,0.98));
-    border: 1px solid var(--border); border-radius: 16px; padding: 22px;
-    position: relative; overflow: hidden; transition: all 0.3s;
-  }
-  .player-panel.active-turn {
-    border-color: var(--accent);
-    box-shadow: 0 0 25px rgba(0,212,255,0.3), inset 0 0 30px rgba(0,212,255,0.05);
-  }
-  .player-panel::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:2px;
-    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
-  }
-  .player-panel.active-turn::before {
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scanLine 2s linear infinite;
-  }
-  @keyframes scanLine {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-  }
-
-  .pp-name {
-    font-family:'Orbitron',monospace; font-size:0.8rem; letter-spacing:2px;
-    color:var(--muted); margin-bottom:4px; text-transform:uppercase;
-  }
+  .pp-name { font-family:'Orbitron',monospace; font-size:.8rem; letter-spacing:2px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; }
   .pp-player { font-family:'Rajdhani',sans-serif; font-size:1.3rem; font-weight:700; color:var(--text); margin-bottom:14px; }
   .pp-secret-label { font-size:11px; color:var(--muted); letter-spacing:2px; font-family:'Space Mono',monospace; margin-bottom:6px; }
-  .pp-secret {
-    font-family:'Orbitron',monospace; font-size:2rem; font-weight:900;
-    color:var(--gold); text-shadow: 0 0 15px rgba(255,215,0,0.5);
-    min-height:44px;
-  }
+  .pp-secret { font-family:'Orbitron',monospace; font-size:2rem; font-weight:900; color:var(--gold); text-shadow:0 0 15px rgba(255,215,0,.5); min-height:44px; }
   .pp-secret.hidden { color:var(--border); text-shadow:none; letter-spacing:8px; font-size:1.2rem; }
 
   .guess-history { margin-top:14px; }
   .gh-label { font-size:10px; color:var(--muted); letter-spacing:2px; font-family:'Space Mono',monospace; margin-bottom:8px; }
   .gh-list { display:flex; flex-wrap:wrap; gap:6px; min-height:30px; }
-  .gh-chip {
-    padding:4px 10px; border-radius:20px; font-family:'Space Mono',monospace;
-    font-size:11px; font-weight:700; transition:all 0.3s;
-  }
-  .gh-chip.high { background:rgba(255,45,85,0.2); border:1px solid var(--red); color:var(--red); }
-  .gh-chip.low  { background:rgba(0,255,136,0.15); border:1px solid var(--green); color:var(--green); }
-  .gh-chip.win  { background:rgba(255,215,0,0.2); border:1px solid var(--gold); color:var(--gold); }
+  .gh-chip { padding:4px 10px; border-radius:20px; font-family:'Space Mono',monospace; font-size:11px; font-weight:700; transition:all .3s; }
+  .gh-chip.high { background:rgba(255,45,85,.2); border:1px solid var(--red); color:var(--red); }
+  .gh-chip.low  { background:rgba(0,255,136,.15); border:1px solid var(--green); color:var(--green); }
+  .gh-chip.win  { background:rgba(255,215,0,.2); border:1px solid var(--gold); color:var(--gold); }
 
-  /* ── Action zone ── */
-  .action-zone {
-    background: linear-gradient(135deg, rgba(13,31,60,0.95), rgba(10,22,40,0.98));
-    border: 1px solid var(--border); border-radius: 16px; padding: 28px;
-    text-align: center; position: relative; overflow: hidden;
-  }
-  .az-prompt { font-family:'Orbitron',monospace; font-size:0.9rem; letter-spacing:2px; color:var(--muted); margin-bottom:20px; }
+  .action-zone { background:linear-gradient(135deg,rgba(13,31,60,.95),rgba(10,22,40,.98)); border:1px solid var(--border); border-radius:16px; padding:28px; text-align:center; position:relative; overflow:hidden; }
+  .az-prompt { font-family:'Orbitron',monospace; font-size:.9rem; letter-spacing:2px; color:var(--muted); margin-bottom:20px; }
   .az-prompt span { color:var(--accent); }
   .az-input-row { display:flex; gap:12px; align-items:center; }
   .az-input-row input { flex:1; text-align:center; font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:700; }
   .az-input-row .btn { width:auto; padding:14px 28px; margin:0; flex-shrink:0; }
 
-  /* ── Alert overlay ── */
-  #alert-overlay {
-    position: fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; align-items:center; justify-content:center;
-    z-index:500; pointer-events:none; opacity:0;
-    transition: opacity 0.3s;
-  }
+  #alert-overlay { position:fixed; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; z-index:500; pointer-events:none; opacity:0; transition:opacity .3s; }
   #alert-overlay.show { opacity:1; }
-  #alert-overlay.show.high { background: rgba(255,45,85,0.15); }
-  #alert-overlay.show.low  { background: rgba(0,255,136,0.1); }
+  #alert-overlay.show.high { background:rgba(255,45,85,.15); }
+  #alert-overlay.show.low  { background:rgba(0,255,136,.1); }
+  .alert-word { font-family:'Orbitron',monospace; font-size:clamp(4rem,15vw,10rem); font-weight:900; letter-spacing:.2em; opacity:0; transform:scale(.5); text-align:center; pointer-events:none; }
+  .alert-word.high { color:var(--red); text-shadow:0 0 60px var(--red),0 0 120px rgba(255,45,85,.5); }
+  .alert-word.low  { color:var(--green); text-shadow:0 0 60px var(--green),0 0 120px rgba(0,255,136,.5); }
+  .alert-word.animate { animation:alertBoom 1.8s ease forwards; }
+  @keyframes alertBoom { 0%{opacity:0;transform:scale(.3) rotate(-5deg)} 15%{opacity:1;transform:scale(1.15) rotate(2deg)} 30%{transform:scale(.95)} 45%{opacity:1;transform:scale(1.05)} 70%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.3)} }
 
-  .alert-word {
-    font-family:'Orbitron',monospace; font-size:clamp(4rem,15vw,10rem);
-    font-weight:900; letter-spacing:0.2em;
-    opacity:0; transform:scale(0.5);
-    text-align:center; pointer-events:none;
-  }
-  .alert-word.high { color:var(--red); text-shadow: 0 0 60px var(--red), 0 0 120px rgba(255,45,85,0.5); }
-  .alert-word.low  { color:var(--green); text-shadow: 0 0 60px var(--green), 0 0 120px rgba(0,255,136,0.5); }
-
-  .alert-word.animate {
-    animation: alertBoom 1.8s ease forwards;
-  }
-  @keyframes alertBoom {
-    0%   { opacity:0; transform:scale(0.3) rotate(-5deg); }
-    15%  { opacity:1; transform:scale(1.15) rotate(2deg); }
-    30%  { transform:scale(0.95); }
-    45%  { opacity:1; transform:scale(1.05); }
-    70%  { opacity:1; transform:scale(1); }
-    100% { opacity:0; transform:scale(1.3); }
-  }
-
-  /* ── Winner screen ── */
   #winner-screen { text-align:center; max-width:600px; }
-  .winner-card {
-    background: linear-gradient(135deg, rgba(13,31,60,0.98), rgba(10,22,40,0.98));
-    border: 2px solid var(--gold); border-radius: 24px; padding: 50px 40px;
-    box-shadow: 0 0 60px rgba(255,215,0,0.3);
-    animation: winnerReveal 0.8s cubic-bezier(0.34,1.56,0.64,1) forwards;
-  }
-  @keyframes winnerReveal {
-    from { opacity:0; transform:scale(0.5) rotate(-10deg); }
-    to   { opacity:1; transform:scale(1) rotate(0); }
-  }
+  .winner-card { background:linear-gradient(135deg,rgba(13,31,60,.98),rgba(10,22,40,.98)); border:2px solid var(--gold); border-radius:24px; padding:50px 40px; box-shadow:0 0 60px rgba(255,215,0,.3); animation:winnerReveal .8s cubic-bezier(.34,1.56,.64,1) forwards; }
+  @keyframes winnerReveal { from{opacity:0;transform:scale(.5) rotate(-10deg)} to{opacity:1;transform:scale(1) rotate(0)} }
   .winner-trophy { font-size:5rem; animation:trophySpin 2s ease infinite; display:block; margin-bottom:20px; }
-  @keyframes trophySpin {
-    0%,100%{transform:rotate(-10deg) scale(1)} 50%{transform:rotate(10deg) scale(1.1)}
-  }
-  .winner-title {
-    font-family:'Orbitron',monospace; font-size:clamp(1.5rem,4vw,2.5rem);
-    font-weight:900; color:var(--gold); letter-spacing:4px; margin-bottom:10px;
-    animation: shimmer 2s linear infinite;
-    background: linear-gradient(90deg, #b8860b, var(--gold), #fff, var(--gold), #b8860b);
-    background-size: 300%;
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  }
+  @keyframes trophySpin { 0%,100%{transform:rotate(-10deg) scale(1)} 50%{transform:rotate(10deg) scale(1.1)} }
+  .winner-title { font-family:'Orbitron',monospace; font-size:clamp(1.5rem,4vw,2.5rem); font-weight:900; color:var(--gold); letter-spacing:4px; margin-bottom:10px; animation:shimmer 2s linear infinite; background:linear-gradient(90deg,#b8860b,var(--gold),#fff,var(--gold),#b8860b); background-size:300%; -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
   @keyframes shimmer { 0%{background-position:0%} 100%{background-position:300%} }
   .winner-name { font-family:'Rajdhani',sans-serif; font-size:2rem; font-weight:700; color:var(--text); margin-bottom:20px; }
-  .winner-reveal {
-    font-family:'Space Mono',monospace; font-size:0.9rem; color:var(--muted); margin-bottom:30px; line-height:1.8;
-  }
+  .winner-reveal { font-family:'Space Mono',monospace; font-size:.9rem; color:var(--muted); margin-bottom:30px; line-height:1.8; }
   .winner-reveal span { color:var(--accent); font-weight:700; }
 
-  /* ── Confetti ── */
-  .confetti-piece {
-    position:fixed; width:10px; height:10px; pointer-events:none; z-index:999;
-    animation: confettiFall linear forwards;
-  }
-  @keyframes confettiFall {
-    0%   { transform:translateY(-20px) rotate(0deg); opacity:1; }
-    100% { transform:translateY(100vh) rotate(720deg); opacity:0; }
-  }
+  .confetti-piece { position:fixed; width:10px; height:10px; pointer-events:none; z-index:999; animation:confettiFall linear forwards; }
+  @keyframes confettiFall { 0%{transform:translateY(-20px) rotate(0deg);opacity:1} 100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
 
-  /* ── Misc ── */
-  .divider { height:1px; background:var(--border); margin:20px 0; }
-  .info-row { display:flex; align-items:center; gap:10px; padding:12px; background:rgba(0,212,255,0.05); border-radius:10px; margin-bottom:10px; }
+  .info-row { display:flex; align-items:center; gap:10px; padding:12px; background:rgba(0,212,255,.05); border-radius:10px; margin-bottom:10px; }
   .info-row .icon { font-size:1.2rem; }
-  .info-row .info-text { font-size:0.9rem; color:var(--muted); }
+  .info-row .info-text { font-size:.9rem; color:var(--muted); }
   .info-row .info-text strong { color:var(--text); }
-  .status-dot { width:8px;height:8px;border-radius:50%; display:inline-block; margin-right:6px; }
-  .status-dot.online { background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 1s ease infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-  /* Step indicators */
-  .step-row { display:flex; align-items:center; gap:12px; margin-bottom:24px; }
-  .step-num {
-    width:32px; height:32px; border-radius:50%; background:rgba(0,212,255,0.1);
-    border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;
-    font-family:'Orbitron',monospace; font-size:0.75rem; color:var(--accent); flex-shrink:0;
+  .secret-setup-area { margin-bottom:16px; padding:16px; background:rgba(0,0,0,.3); border-radius:12px; border:1px solid var(--border); }
+  .secret-status { font-size:.85rem; margin-top:8px; }
+  .secret-status.set { color:var(--green); }
+  .secret-status.unset { color:var(--muted); }
+
+  /* ── Your number badge (game screen) ── */
+  .my-number-badge {
+    display:inline-flex; align-items:center; gap:10px;
+    background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(123,47,255,.08));
+    border:1px solid rgba(0,212,255,.25); border-radius:14px;
+    padding:10px 20px; margin-bottom:18px;
+    font-family:'Space Mono',monospace; font-size:12px; letter-spacing:2px; color:var(--muted);
+    width:100%; justify-content:center;
   }
-  .step-text { font-size:0.9rem; color:var(--muted); }
-
-  /* ── Secret number setup ── */
-  .secret-setup-area {
-    margin-bottom: 16px;
-    padding: 16px; background:rgba(0,0,0,0.3); border-radius:12px;
-    border: 1px solid var(--border);
+  .my-number-badge .mnb-label { text-transform:uppercase; }
+  .my-number-badge .mnb-val {
+    font-family:'Orbitron',monospace; font-size:1.3rem; font-weight:900;
+    color:var(--gold); text-shadow:0 0 12px rgba(255,215,0,.5);
+    letter-spacing:4px;
   }
-  .secret-status { font-size:0.85rem; margin-top:8px; }
-  .secret-status.set { color: var(--green); }
-  .secret-status.unset { color: var(--muted); }
+  .my-number-badge .mnb-lock { font-size:1rem; opacity:.7; }
 
-  .start-btn-row { grid-column: 1/-1; margin-top:10px; }
-
-  @media(max-width:600px) {
-    .players-grid { grid-template-columns:1fr; }
-    .az-input-row { flex-direction:column; }
-    .az-input-row .btn { width:100%; }
-    .home-btns { grid-template-columns:1fr; }
+  /* ── Winner stats ── */
+  #winner-screen { max-width:640px; }
+  .stats-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:12px;
+    margin:20px 0; text-align:left;
   }
+  .stat-card {
+    background:rgba(0,0,0,.35); border:1px solid var(--border);
+    border-radius:12px; padding:16px 18px;
+  }
+  .stat-card.p1-card { border-color:rgba(0,212,255,.3); }
+  .stat-card.p2-card { border-color:rgba(123,47,255,.3); }
+  .stat-card.winner-card-stat { border-color:var(--gold); background:rgba(255,215,0,.05); }
+  .sc-name { font-family:'Orbitron',monospace; font-size:.7rem; letter-spacing:2px; margin-bottom:10px; }
+  .sc-name.p1 { color:var(--accent); }
+  .sc-name.p2 { color:var(--accent2); }
+  .sc-secret { display:flex; align-items:baseline; gap:6px; margin-bottom:10px; }
+  .sc-secret-lbl { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; }
+  .sc-secret-val { font-family:'Orbitron',monospace; font-size:1.6rem; font-weight:900; color:var(--gold); text-shadow:0 0 10px rgba(255,215,0,.4); }
+  .sc-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-top:1px solid rgba(255,255,255,.05); }
+  .sc-row-lbl { font-size:.78rem; color:var(--muted); font-family:'Space Mono',monospace; font-size:10px; }
+  .sc-row-val { font-family:'Orbitron',monospace; font-size:.85rem; font-weight:700; color:var(--text); }
+  .sc-row-val.good { color:var(--green); }
+  .sc-row-val.bad  { color:var(--red); }
+
+  .total-stat-row {
+    display:flex; justify-content:center; gap:28px; flex-wrap:wrap;
+    padding:14px 0; margin:4px 0 20px;
+    border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+  }
+  .tsr-item { text-align:center; }
+  .tsr-val { font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:900; color:var(--accent); }
+  .tsr-lbl { font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:2px; margin-top:2px; }
+
+  @media(max-width:600px) { .players-grid{grid-template-columns:1fr} .az-input-row{flex-direction:column} .az-input-row .btn{width:100%} .home-btns{grid-template-columns:1fr} .stats-grid{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
 
 <canvas id="bg-canvas"></canvas>
-
-
-<div id="alert-overlay">
-  <div id="alert-word" class="alert-word"></div>
-</div>
+<div id="alert-overlay"><div id="alert-word" class="alert-word"></div></div>
 
 <div id="app">
   <div class="logo">NumDuel</div>
   <div class="tagline">Live · Multiplayer · Mind Game</div>
 
-  <!-- HOME SCREEN -->
+  <!-- HOME -->
   <div class="screen active" id="home-screen">
     <div class="home-btns">
-      <div class="home-card-btn" onclick="showScreen('create-screen')">
+      <div class="home-card-btn" onclick="goTo('create-screen')">
         <div class="hcb-icon">🏛️</div>
         <div class="hcb-title">Create Room</div>
         <div class="hcb-desc">Host a new game &amp; invite a friend</div>
       </div>
-      <div class="home-card-btn" onclick="showScreen('join-screen')">
+      <div class="home-card-btn" onclick="goTo('join-screen')">
         <div class="hcb-icon">🚪</div>
         <div class="hcb-title">Join Room</div>
         <div class="hcb-desc">Enter a code to join a game</div>
@@ -405,62 +235,52 @@
     </div>
   </div>
 
-  <!-- CREATE ROOM SCREEN -->
+  <!-- CREATE ROOM -->
   <div class="screen" id="create-screen">
     <div class="card">
       <div class="card-title">⚡ Create Room</div>
       <div class="input-group">
-        <label>Your Name (Designer / Host)</label>
+        <label>Your Name</label>
         <input type="text" id="create-name" placeholder="e.g. Alex" maxlength="20">
       </div>
       <div class="input-group">
         <label>Number Range</label>
         <div class="range-row">
-          <input type="number" id="range-min" placeholder="Min (e.g. 1)" value="1" min="0">
-          <input type="number" id="range-max" placeholder="Max (e.g. 100)" value="100" min="1">
+          <input type="number" id="range-min" placeholder="Min" value="1" min="0">
+          <input type="number" id="range-max" placeholder="Max" value="100" min="1">
         </div>
       </div>
-      <button class="btn btn-primary" onclick="createRoom()">GENERATE ROOM CODE →</button>
-      <button class="btn btn-secondary" onclick="showScreen('home-screen')">← Back</button>
+      <div id="create-status" style="display:none" class="status-box"><div class="spin-sm"></div><span id="create-status-txt">Connecting…</span></div>
+      <button class="btn btn-primary" id="btn-create" onclick="createRoom()">GENERATE ROOM CODE →</button>
+      <button class="btn btn-secondary" onclick="goTo('home-screen')">← Back</button>
     </div>
   </div>
 
-  <!-- WAITING SCREEN (host) -->
+  <!-- WAITING (host) -->
   <div class="screen" id="waiting-screen">
     <div class="card">
       <div class="card-title">🔗 Share Room Code</div>
-      <div class="info-row">
-        <span class="icon">👤</span>
-        <div class="info-text">Host: <strong id="ws-host-name">—</strong></div>
-      </div>
-      <div class="info-row">
-        <span class="icon">🎯</span>
-        <div class="info-text">Range: <strong id="ws-range">—</strong></div>
-      </div>
+      <div class="info-row"><span class="icon">👤</span><div class="info-text">Host: <strong id="ws-host-name">—</strong></div></div>
+      <div class="info-row"><span class="icon">🎯</span><div class="info-text">Range: <strong id="ws-range">—</strong></div></div>
       <div class="code-box">
         <div class="code-label">Room Code — Share with opponent</div>
         <div class="code-value" id="room-code-display">——</div>
       </div>
-      <div style="text-align:center; padding:16px 0; color:var(--muted); font-family:'Space Mono',monospace; font-size:12px; letter-spacing:2px;">
+      <div style="text-align:center;padding:16px 0;color:var(--muted);font-family:'Space Mono',monospace;font-size:12px;letter-spacing:2px;">
         WAITING FOR PLAYER 2
-        <div style="margin-top:10px;">
-          <span class="waiting-dot"></span>
-          <span class="waiting-dot"></span>
-          <span class="waiting-dot"></span>
-        </div>
+        <div style="margin-top:10px;"><span class="waiting-dot"></span><span class="waiting-dot"></span><span class="waiting-dot"></span></div>
       </div>
-      <div id="ws-player2-joined" style="display:none;">
-        <div class="info-row" style="border:1px solid var(--green); background:rgba(0,255,136,0.07);">
-          <span class="icon">✅</span>
-          <div class="info-text"><strong id="ws-p2-name">—</strong> has joined!</div>
+      <div id="ws-player2-joined" style="display:none">
+        <div class="info-row" style="border:1px solid var(--green);background:rgba(0,255,136,.07)">
+          <span class="icon">✅</span><div class="info-text"><strong id="ws-p2-name">—</strong> has joined!</div>
         </div>
-        <button class="btn btn-gold" onclick="proceedToSetup()" style="margin-top:16px;">START GAME ▶</button>
+        <button class="btn btn-gold" id="btn-start-game" onclick="hostStartSetup()" style="margin-top:16px">START GAME ▶</button>
       </div>
-      <button class="btn btn-secondary" onclick="showScreen('home-screen')">← Cancel</button>
+      <button class="btn btn-secondary" onclick="destroyPeer(); goTo('home-screen')">← Cancel</button>
     </div>
   </div>
 
-  <!-- JOIN ROOM SCREEN -->
+  <!-- JOIN -->
   <div class="screen" id="join-screen">
     <div class="card">
       <div class="card-title">🚪 Join Room</div>
@@ -470,84 +290,66 @@
       </div>
       <div class="input-group">
         <label>Room Code</label>
-        <input type="text" id="join-code" placeholder="Enter 6-digit code" maxlength="6" style="letter-spacing:8px; font-family:'Orbitron',monospace; text-align:center; font-size:1.5rem;">
+        <input type="text" id="join-code" placeholder="ABCD" maxlength="4"
+          style="letter-spacing:8px;font-family:'Orbitron',monospace;text-align:center;font-size:1.5rem;text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()">
       </div>
-      <div id="join-status" style="display:none; font-family:'Space Mono',monospace; font-size:12px; margin-top:10px; text-align:center; letter-spacing:1px;"></div>
-      <button class="btn btn-primary" onclick="joinRoom()">JOIN ROOM →</button>
-      <button class="btn btn-secondary" onclick="showScreen('home-screen')">← Back</button>
+      <div id="join-status" style="display:none" class="status-box"><div class="spin-sm"></div><span id="join-status-txt">Connecting…</span></div>
+      <button class="btn btn-primary" id="btn-join" onclick="joinRoom()">JOIN ROOM →</button>
+      <button class="btn btn-secondary" id="btn-join-back" onclick="goTo('home-screen')">← Back</button>
     </div>
   </div>
 
-  <!-- JOINED WAITING (player 2) -->
+  <!-- JOINED WAITING (guest) -->
   <div class="screen" id="joined-waiting-screen">
     <div class="card">
       <div class="card-title">🎮 Room Joined!</div>
-      <div class="info-row" style="border:1px solid var(--green); background:rgba(0,255,136,0.07);">
-        <span class="icon">✅</span>
-        <div class="info-text">You joined <strong id="jw-host-name">—</strong>'s room</div>
+      <div class="info-row" style="border:1px solid var(--green);background:rgba(0,255,136,.07)">
+        <span class="icon">✅</span><div class="info-text">You joined <strong id="jw-host-name">—</strong>'s room</div>
       </div>
-      <div class="info-row">
-        <span class="icon">🎯</span>
-        <div class="info-text">Range: <strong id="jw-range">—</strong></div>
-      </div>
-      <div style="text-align:center; padding:20px 0; color:var(--muted); font-family:'Space Mono',monospace; font-size:12px; letter-spacing:2px;">
+      <div class="info-row"><span class="icon">🎯</span><div class="info-text">Range: <strong id="jw-range">—</strong></div></div>
+      <div style="text-align:center;padding:20px 0;color:var(--muted);font-family:'Space Mono',monospace;font-size:12px;letter-spacing:2px;">
         WAITING FOR HOST TO START
-        <div style="margin-top:10px;">
-          <span class="waiting-dot"></span>
-          <span class="waiting-dot"></span>
-          <span class="waiting-dot"></span>
-        </div>
+        <div style="margin-top:10px;"><span class="waiting-dot"></span><span class="waiting-dot"></span><span class="waiting-dot"></span></div>
       </div>
     </div>
   </div>
 
-  <!-- SECRET NUMBER SETUP -->
+  <!-- SECRET SETUP -->
   <div class="screen" id="setup-screen">
     <div class="card">
       <div class="card-title">🔒 Set Your Secret Number</div>
-      <div style="font-size:0.9rem; color:var(--muted); margin-bottom:20px; line-height:1.6;">
-        Each player picks a secret number. Your opponent will try to guess it!<br>
-        <strong style="color:var(--accent);">Range: <span id="setup-range">—</span></strong>
+      <div style="font-size:.9rem;color:var(--muted);margin-bottom:20px;line-height:1.6">
+        Pick a secret number. Your opponent will try to guess it!<br>
+        <strong style="color:var(--accent)">Range: <span id="setup-range">—</span></strong>
       </div>
-
-      <div class="secret-setup-area" id="p1-setup-area">
-        <div style="font-family:'Orbitron',monospace; font-size:0.75rem; color:var(--accent); letter-spacing:2px; margin-bottom:10px;">
-          👤 <span id="setup-p1-name">PLAYER 1</span>
+      <div class="secret-setup-area" id="my-setup-area">
+        <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--accent);letter-spacing:2px;margin-bottom:10px">
+          👤 <span id="setup-my-name">YOU</span>
         </div>
         <div class="az-input-row">
-          <input type="number" id="p1-secret-input" placeholder="Your secret #">
-          <button class="btn btn-primary" onclick="setSecret(1)" style="margin:0; width:auto; padding:14px 20px;">SET</button>
+          <input type="number" id="my-secret-input" placeholder="Your secret #">
+          <button class="btn btn-primary" id="btn-set-secret" onclick="setMySecret()" style="margin:0;width:auto;padding:14px 20px">SET</button>
         </div>
-        <div class="secret-status unset" id="p1-secret-status">⏳ Not set yet</div>
+        <div class="secret-status unset" id="my-secret-status">⏳ Not set yet</div>
       </div>
-
-      <div class="secret-setup-area" id="p2-setup-area">
-        <div style="font-family:'Orbitron',monospace; font-size:0.75rem; color:var(--accent2); letter-spacing:2px; margin-bottom:10px;">
-          👤 <span id="setup-p2-name">PLAYER 2</span>
+      <div class="secret-setup-area" style="opacity:.45;pointer-events:none">
+        <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--accent2);letter-spacing:2px;margin-bottom:10px">
+          👤 <span id="setup-opp-name">OPPONENT</span>
         </div>
-        <div class="az-input-row">
-          <input type="number" id="p2-secret-input" placeholder="Your secret #">
-          <button class="btn btn-primary" onclick="setSecret(2)" style="margin:0; width:auto; padding:14px 20px;">SET</button>
-        </div>
-        <div class="secret-status unset" id="p2-secret-status">⏳ Not set yet</div>
+        <div class="secret-status unset" id="opp-secret-status">⏳ Waiting for opponent…</div>
       </div>
-
-      <button class="btn btn-gold" id="begin-game-btn" onclick="beginGame()" style="display:none; margin-top:16px;">
-        ▶ BEGIN DUEL
-      </button>
     </div>
   </div>
 
-  <!-- GAME SCREEN -->
+  <!-- GAME -->
   <div class="screen" id="game-screen">
     <div class="game-header">
       <div class="game-title">⚔️ NUMDUEL</div>
       <div class="range-badge" id="game-range-badge">Range: —</div>
       <div class="turn-indicator" id="turn-indicator">YOUR TURN</div>
     </div>
-
     <div class="players-grid">
-      <!-- Player 1 Panel -->
       <div class="player-panel" id="p1-panel">
         <div class="pp-name">Player 1</div>
         <div class="pp-player" id="p1-display-name">—</div>
@@ -558,8 +360,6 @@
           <div class="gh-list" id="p1-guess-list"></div>
         </div>
       </div>
-
-      <!-- Player 2 Panel -->
       <div class="player-panel" id="p2-panel">
         <div class="pp-name">Player 2</div>
         <div class="pp-player" id="p2-display-name">—</div>
@@ -571,10 +371,15 @@
         </div>
       </div>
     </div>
+    <!-- Your secret number badge -->
+    <div class="my-number-badge">
+      <span class="mnb-lock">🔒</span>
+      <span class="mnb-label">Your secret number is</span>
+      <span class="mnb-val" id="my-number-display">—</span>
+    </div>
 
-    <!-- Action zone -->
     <div class="action-zone">
-      <div class="az-prompt" id="az-prompt">
+      <div class="az-prompt">
         <span id="az-whose-turn">—</span>, guess <span id="az-opponent">—</span>'s number!
       </div>
       <div class="az-input-row">
@@ -584,729 +389,655 @@
     </div>
   </div>
 
-  <!-- WINNER SCREEN -->
+  <!-- WINNER -->
   <div class="screen" id="winner-screen">
     <div class="winner-card">
       <span class="winner-trophy">🏆</span>
       <div class="winner-title">WINNER!</div>
       <div class="winner-name" id="winner-name">—</div>
-      <div class="winner-reveal" id="winner-reveal"></div>
-      <button class="btn btn-gold" onclick="resetGame()">🔄 PLAY AGAIN</button>
+
+      <!-- Summary stats row -->
+      <div class="total-stat-row">
+        <div class="tsr-item"><div class="tsr-val" id="stat-total-guesses">0</div><div class="tsr-lbl">TOTAL GUESSES</div></div>
+        <div class="tsr-item"><div class="tsr-val" id="stat-p1-guesses">0</div><div class="tsr-lbl">P1 GUESSES</div></div>
+        <div class="tsr-item"><div class="tsr-val" id="stat-p2-guesses">0</div><div class="tsr-lbl">P2 GUESSES</div></div>
+      </div>
+
+      <!-- Per-player stat cards -->
+      <div class="stats-grid">
+        <div class="stat-card p1-card" id="stat-card-p1">
+          <div class="sc-name p1" id="stat-p1-name">PLAYER 1</div>
+          <div class="sc-secret">
+            <span class="sc-secret-lbl">SECRET</span>
+            <span class="sc-secret-val" id="stat-p1-secret">—</span>
+          </div>
+          <div class="sc-row"><span class="sc-row-lbl">GUESSES MADE</span><span class="sc-row-val" id="stat-p1-count">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">CORRECT GUESSES</span><span class="sc-row-val good" id="stat-p1-correct">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">TOO HIGH</span><span class="sc-row-val bad" id="stat-p1-high">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">TOO LOW</span><span class="sc-row-val" id="stat-p1-low">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">RESULT</span><span class="sc-row-val" id="stat-p1-result">—</span></div>
+        </div>
+        <div class="stat-card p2-card" id="stat-card-p2">
+          <div class="sc-name p2" id="stat-p2-name">PLAYER 2</div>
+          <div class="sc-secret">
+            <span class="sc-secret-lbl">SECRET</span>
+            <span class="sc-secret-val" id="stat-p2-secret">—</span>
+          </div>
+          <div class="sc-row"><span class="sc-row-lbl">GUESSES MADE</span><span class="sc-row-val" id="stat-p2-count">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">CORRECT GUESSES</span><span class="sc-row-val good" id="stat-p2-correct">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">TOO HIGH</span><span class="sc-row-val bad" id="stat-p2-high">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">TOO LOW</span><span class="sc-row-val" id="stat-p2-low">—</span></div>
+          <div class="sc-row"><span class="sc-row-lbl">RESULT</span><span class="sc-row-val" id="stat-p2-result">—</span></div>
+        </div>
+      </div>
+
+      <button class="btn btn-gold" onclick="playAgain()">🔄 PLAY AGAIN</button>
     </div>
   </div>
 
 </div><!-- #app -->
 
 <script>
-// ══════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════
-const state = {
-  rooms: {}, // simulated shared memory: roomCode -> roomData
-  currentRoom: null,
-  currentRole: null, // 'host' or 'guest'
-  myPlayerIndex: null, // 1 or 2
+// ═══════════════════════════════════════════════════════
+// PEERJS CONFIG  — explicit broker + STUN for reliability
+// ═══════════════════════════════════════════════════════
+const PEER_CFG = {
+  host: '0.peerjs.com', port: 443, path: '/', secure: true, debug: 0,
+  config: { iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ]}
 };
 
-const game = {
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let peer      = null;   // our Peer object
+let hostConn  = null;   // guest → host connection
+let guestConn = null;   // host ← guest connection
+
+const me = { role: null, name: '', playerIndex: null }; // 'host' | 'guest'
+
+const gm = {
   p1: { name:'', secret:null, guesses:[] },
   p2: { name:'', secret:null, guesses:[] },
   range: { min:1, max:100 },
-  currentTurn: 1, // player 1 goes first
-  started: false,
+  currentTurn: 1,  // 1 or 2
 };
 
-// ── Per-room localStorage keys avoid read/write race conditions ──
-function roomKey(code) { return 'numduel_room_' + code; }
+// Safe room-code peer ID: alphanumeric only
+function makePeerId(code){ return 'numduel-' + code.toUpperCase(); }
 
-function getRoom(code) {
-  if (!code) return null;
-  try {
-    const raw = localStorage.getItem(roomKey(code));
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch(e) { return null; }
+// Generate a 4-letter room code
+function makeCode(){
+  return Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
 }
 
-function setRoom(code, data) {
-  try { localStorage.setItem(roomKey(code), JSON.stringify(data)); }
-  catch(e) { console.warn('setRoom failed', e); }
+// ─── destroy old peer safely ───
+function destroyPeer(){
+  if(peer){ try{ peer.destroy(); }catch(e){} peer=null; }
+  hostConn = null; guestConn = null;
 }
 
-function deleteRoom(code) {
-  try { localStorage.removeItem(roomKey(code)); } catch(e) {}
-}
-
-// ══════════════════════════════════════════════
-// SCREENS
-// ══════════════════════════════════════════════
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+// ═══════════════════════════════════════════════════════
+// SCREEN HELPER
+// ═══════════════════════════════════════════════════════
+function goTo(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// ══════════════════════════════════════════════
-// CREATE ROOM
-// ══════════════════════════════════════════════
-function createRoom() {
+// ═══════════════════════════════════════════════════════
+// CREATE ROOM (HOST)
+// ═══════════════════════════════════════════════════════
+function createRoom(){
   const name = document.getElementById('create-name').value.trim();
-  const min = parseInt(document.getElementById('range-min').value);
-  const max = parseInt(document.getElementById('range-max').value);
-  if (!name) return shake('create-name');
-  if (isNaN(min) || isNaN(max) || min >= max) return alert('Please set a valid range (min < max).');
+  const min  = parseInt(document.getElementById('range-min').value);
+  const max  = parseInt(document.getElementById('range-max').value);
+  if(!name){ shake('create-name'); return; }
+  if(isNaN(min)||isNaN(max)||min>=max){ alert('Set a valid range (min < max).'); return; }
 
-  const code = generateCode();
-  const roomData = {
-    code, hostName: name, min, max,
-    guestName: null, guestJoined: false,
-    p1Secret: null, p2Secret: null,
-    currentTurn: 1,
-    p1Guesses: [], p2Guesses: [],
-    gameStarted: false, winner: null,
-    timestamp: Date.now()
-  };
-  setRoom(code, roomData);
+  me.role = 'host'; me.name = name; me.playerIndex = 1;
+  gm.p1.name = name; gm.range = {min,max};
 
-  state.currentRoom = code;
-  state.currentRole = 'host';
-  state.myPlayerIndex = 1;
-  game.p1.name = name;
-  game.range = {min, max};
+  const statusBox = document.getElementById('create-status');
+  const statusTxt = document.getElementById('create-status-txt');
+  const btnCreate = document.getElementById('btn-create');
+  statusBox.style.display='flex'; statusBox.className='status-box';
+  statusTxt.textContent='Connecting to network…';
+  btnCreate.disabled=true;
 
-  document.getElementById('ws-host-name').textContent = name;
-  document.getElementById('ws-range').textContent = `${min} – ${max}`;
-  document.getElementById('room-code-display').textContent = code;
-  showScreen('waiting-screen');
+  destroyPeer();
+  const code = makeCode();
+  peer = new Peer(makePeerId(code), PEER_CFG);
 
-  // Poll for guest joining
-  startPolling('waiting', code);
+  const openTO = setTimeout(()=>{
+    statusBox.className='status-box err'; statusTxt.textContent='Network timeout. Try again.';
+    btnCreate.disabled=false; destroyPeer();
+  }, 12000);
+
+  peer.on('error', e=>{
+    clearTimeout(openTO);
+    if(e.type==='unavailable-id'){
+      // Code collision — retry with a new one
+      peer.destroy(); createRoom(); return;
+    }
+    statusBox.className='status-box err'; statusTxt.textContent='Error: '+e.type;
+    btnCreate.disabled=false;
+  });
+
+  peer.on('open', ()=>{
+    clearTimeout(openTO);
+    statusBox.style.display='none'; btnCreate.disabled=false;
+
+    // Show waiting screen
+    document.getElementById('ws-host-name').textContent = name;
+    document.getElementById('ws-range').textContent = `${min} – ${max}`;
+    document.getElementById('room-code-display').textContent = code;
+    goTo('waiting-screen');
+    playSound('join');
+  });
+
+  // Listen for guest connection
+  peer.on('connection', conn=>{
+    conn.on('open',()=>{
+      guestConn = conn;
+      conn.on('data', d=>hostReceive(d));
+      conn.on('close',()=>{ guestConn=null; });
+    });
+    conn.on('error',e=>console.warn('Guest conn err',e));
+  });
 }
 
-function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// ══════════════════════════════════════════════
-// JOIN ROOM
-// ══════════════════════════════════════════════
-function joinRoom() {
+// ═══════════════════════════════════════════════════════
+// JOIN ROOM (GUEST)
+// ═══════════════════════════════════════════════════════
+function joinRoom(){
   const name = document.getElementById('join-name').value.trim();
-  const code = document.getElementById('join-code').value.trim();
-  if (!name) return shake('join-name');
-  if (code.length !== 6) return shake('join-code');
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if(!name){ shake('join-name'); return; }
+  if(code.length!==4){ shake('join-code'); return; }
 
-  const btn = document.querySelector('#join-screen .btn-primary');
-  const statusEl = document.getElementById('join-status');
-  btn.disabled = true;
-  btn.textContent = 'SEARCHING…';
-  if (statusEl) { statusEl.textContent = ''; statusEl.style.display = 'none'; }
+  me.role='guest'; me.name=name; me.playerIndex=2;
 
-  let attempts = 0;
-  const MAX = 15; // retry for ~7.5 seconds total
+  const statusBox = document.getElementById('join-status');
+  const statusTxt = document.getElementById('join-status-txt');
+  const btnJoin   = document.getElementById('btn-join');
+  const btnBack   = document.getElementById('btn-join-back');
+  statusBox.style.display='flex'; statusBox.className='status-box';
+  statusTxt.textContent='Initialising…';
+  btnJoin.disabled=true; btnBack.disabled=true;
 
-  const tryJoin = () => {
-    attempts++;
-    const room = getRoom(code);
+  function resetJoinUI(errMsg){
+    statusBox.style.display='none'; statusBox.className='status-box';
+    btnJoin.disabled=false; btnBack.disabled=false;
+    if(errMsg){ alert(errMsg); }
+  }
 
-    if (!room) {
-      if (attempts < MAX) {
-        if (statusEl) {
-          statusEl.textContent = `Looking for room… (${attempts}/${MAX})`;
-          statusEl.style.display = 'block';
-          statusEl.style.color = 'var(--muted)';
-        }
-        setTimeout(tryJoin, 500);
-        return;
-      }
-      // All retries exhausted
-      btn.disabled = false;
-      btn.textContent = 'JOIN ROOM →';
-      if (statusEl) {
-        statusEl.textContent = '❌ Room not found. Check the code and try again.';
-        statusEl.style.color = 'var(--red)';
-        statusEl.style.display = 'block';
-      }
-      return;
+  destroyPeer();
+  // Guest gets a random peer ID
+  peer = new Peer(PEER_CFG);
+
+  const openTO = setTimeout(()=>{
+    destroyPeer(); resetJoinUI('Network timeout. Check your connection.');
+  }, 12000);
+
+  peer.on('error', e=>{
+    clearTimeout(openTO);
+    if(e.type==='peer-unavailable'){
+      resetJoinUI(`Room "${code}" not found. Double-check the code!`);
+    } else {
+      resetJoinUI('Connection error: '+e.type);
     }
+  });
 
-    if (room.guestJoined && room.guestName !== name) {
-      btn.disabled = false;
-      btn.textContent = 'JOIN ROOM →';
-      if (statusEl) {
-        statusEl.textContent = '❌ Room is full (already has 2 players).';
-        statusEl.style.color = 'var(--red)';
-        statusEl.style.display = 'block';
-      }
-      return;
-    }
+  peer.on('open', ()=>{
+    clearTimeout(openTO);
+    statusTxt.textContent=`Connecting to room ${code}…`;
 
-    // SUCCESS — write guest into room
-    room.guestName = name;
-    room.guestJoined = true;
-    setRoom(code, room);
+    // FIX: connect INSIDE open callback — peer must be fully ready first
+    hostConn = peer.connect(makePeerId(code), {reliable:true});
 
-    state.currentRoom = code;
-    state.currentRole = 'guest';
-    state.myPlayerIndex = 2;
-    game.p2.name = name;
-    game.p1.name = room.hostName;
-    game.range = {min: room.min, max: room.max};
+    const connTO = setTimeout(()=>{
+      try{ hostConn.close(); }catch(e){} hostConn=null;
+      resetJoinUI(`Room "${code}" is unreachable. Host may have left.`);
+    }, 12000);
 
-    btn.disabled = false;
-    btn.textContent = 'JOIN ROOM →';
-
-    document.getElementById('jw-host-name').textContent = room.hostName;
-    document.getElementById('jw-range').textContent = `${room.min} – ${room.max}`;
-    showScreen('joined-waiting-screen');
-    startPolling('joined-waiting', code);
-  };
-
-  tryJoin();
-}
-
-// ══════════════════════════════════════════════
-// HOST: see guest joined → proceed to setup
-// ══════════════════════════════════════════════
-let pollInterval = null;
-function startPolling(mode, code) {
-  clearInterval(pollInterval);
-  window._currentPollMode = mode;
-  pollInterval = setInterval(() => {
-    const room = getRoom(code);
-    if (!room) return;
-
-    if (mode === 'waiting' && room.guestJoined && !document.getElementById('ws-player2-joined').style.display.includes('block')) {
-      document.getElementById('ws-player2-joined').style.display = 'block';
-      document.getElementById('ws-p2-name').textContent = room.guestName;
-      game.p2.name = room.guestName;
+    hostConn.on('open',()=>{
+      clearTimeout(connTO);
+      resetJoinUI(); // hide spinner
       playSound('join');
-    }
+      // Tell host we joined
+      hostConn.send({type:'JOIN', name});
+      hostConn.on('data', d=>guestReceive(d));
+      hostConn.on('close',()=>{ /* host disconnected */ });
+    });
 
-    if (mode === 'joined-waiting' && room.gameStarted) {
-      clearInterval(pollInterval);
-      syncFromRoom(room);
-      showSetupScreen();
-    }
-
-    if (mode === 'waiting-setup' || mode === 'setup') {
-      syncFromRoom(room);
-      if (room.p1Secret !== null && room.p2Secret !== null) {
-        clearInterval(pollInterval);
-        beginGame();
-      }
-    }
-
-    if (mode === 'game') {
-      const saved = getRoom(code);
-      if (!saved) return;
-      const prevTurn = game.currentTurn;
-      syncGameFromRoom(saved);
-      if (saved.winner) {
-        clearInterval(pollInterval);
-        showWinner(saved.winner === 'p1' ? game.p1.name : game.p2.name, saved);
-        return;
-      }
-      if (saved.currentTurn !== prevTurn) {
-        renderGameScreen();
-      }
-    }
-  }, 800);
+    hostConn.on('error',e=>{
+      clearTimeout(connTO);
+      resetJoinUI('Connection error: '+e.message);
+    });
+  });
 }
 
-function proceedToSetup() {
-  const code = state.currentRoom;
-  const room = getRoom(code);
-  room.gameStarted = true;
-  setRoom(code, room);
+// ═══════════════════════════════════════════════════════
+// HOST RECEIVE
+// ═══════════════════════════════════════════════════════
+function hostReceive(data){
+  if(data.type==='JOIN'){
+    gm.p2.name = data.name;
+    document.getElementById('ws-p2-name').textContent = data.name;
+    document.getElementById('ws-player2-joined').style.display='block';
+    playSound('join');
+  }
+  if(data.type==='SECRET_READY'){
+    gm.p2.secret = data.secret;
+    document.getElementById('opp-secret-status').textContent='✅ Opponent ready!';
+    document.getElementById('opp-secret-status').className='secret-status set';
+    checkBothSecretsSet();
+  }
+  if(data.type==='GUESS'){
+    // guest submitted a guess — p2 guessing p1's secret
+    processGuess(2, data.value);
+  }
+  if(data.type==='PLAY_AGAIN'){
+    resetForPlayAgain();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// GUEST RECEIVE
+// ═══════════════════════════════════════════════════════
+function guestReceive(data){
+  if(data.type==='ROOM_INFO'){
+    gm.p1.name = data.p1Name;
+    gm.range   = {min:data.min, max:data.max};
+    document.getElementById('jw-host-name').textContent = data.p1Name;
+    document.getElementById('jw-range').textContent = `${data.min} – ${data.max}`;
+    goTo('joined-waiting-screen');
+  }
+  if(data.type==='START_SETUP'){
+    gm.p1.name = data.p1Name; gm.p2.name = me.name;
+    gm.range = {min:data.min, max:data.max};
+    showSetupScreen();
+    playSound('start');
+  }
+  if(data.type==='OPP_SECRET_READY'){
+    // host's secret is set
+    document.getElementById('opp-secret-status').textContent='✅ Opponent ready!';
+    document.getElementById('opp-secret-status').className='secret-status set';
+    // no need to do anything else — host triggers beginGame for both
+  }
+  if(data.type==='BEGIN_GAME'){
+    gm.currentTurn = data.currentTurn;
+    gm.p1.guesses=[]; gm.p2.guesses=[];
+    beginGame();
+  }
+  if(data.type==='GUESS_RESULT'){
+    // host computed the result, broadcast to both
+    const {playerIndex, guessNum, result, currentTurn} = data;
+    const pKey = playerIndex===1 ? 'p1' : 'p2';
+    gm[pKey].guesses.push({num:guessNum, result});
+    gm.currentTurn = currentTurn;
+    if(result!=='win') showAlert(result);
+    renderGameScreen();
+  }
+  if(data.type==='GAME_OVER'){
+    gm.p1.secret = data.p1Secret;
+    gm.p2.secret = data.p2Secret;
+    showWinner(data.winnerName, data.totalGuesses, data.p1Secret, data.p2Secret);
+  }
+  if(data.type==='PLAY_AGAIN'){
+    resetForPlayAgain();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HOST: send ROOM_INFO right after guest joins, before start
+// ═══════════════════════════════════════════════════════
+// We send ROOM_INFO immediately when guest connects (already done via JOIN handler above)
+// But we need to also push room info — do it when guest sends JOIN:
+const _origHostReceive = hostReceive;
+function hostReceive(data){
+  if(data.type==='JOIN'){
+    gm.p2.name = data.name;
+    document.getElementById('ws-p2-name').textContent = data.name;
+    document.getElementById('ws-player2-joined').style.display='block';
+    playSound('join');
+    // Immediately tell guest the room details
+    sendToGuest({type:'ROOM_INFO', p1Name:gm.p1.name, min:gm.range.min, max:gm.range.max});
+    return;
+  }
+  if(data.type==='SECRET_READY'){
+    gm.p2.secret = data.secret;
+    document.getElementById('opp-secret-status').textContent='✅ Opponent ready!';
+    document.getElementById('opp-secret-status').className='secret-status set';
+    // Tell guest host is also ready (if host already set)
+    if(gm.p1.secret!==null){
+      sendToGuest({type:'OPP_SECRET_READY'});
+    }
+    checkBothSecretsSet();
+    return;
+  }
+  if(data.type==='GUESS'){
+    processGuess(2, data.value);
+    return;
+  }
+  if(data.type==='PLAY_AGAIN'){
+    resetForPlayAgain();
+    return;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HOST: start setup phase
+// ═══════════════════════════════════════════════════════
+function hostStartSetup(){
+  sendToGuest({type:'START_SETUP', p1Name:gm.p1.name, min:gm.range.min, max:gm.range.max});
   showSetupScreen();
-  startPolling('waiting-setup', code);
+  playSound('start');
 }
 
-function showSetupScreen() {
-  const room = getRoom(state.currentRoom);
-  game.p1.name = room.hostName;
-  game.p2.name = room.guestName;
-  game.range = {min: room.min, max: room.max};
+// ═══════════════════════════════════════════════════════
+// SETUP SCREEN
+// ═══════════════════════════════════════════════════════
+function showSetupScreen(){
+  document.getElementById('setup-range').textContent = `${gm.range.min} – ${gm.range.max}`;
+  document.getElementById('setup-my-name').textContent = me.name;
+  document.getElementById('setup-opp-name').textContent = me.role==='host' ? gm.p2.name : gm.p1.name;
+  document.getElementById('my-secret-input').value='';
+  document.getElementById('my-secret-input').disabled=false;
+  document.getElementById('btn-set-secret').disabled=false;
+  document.getElementById('my-secret-status').textContent='⏳ Not set yet';
+  document.getElementById('my-secret-status').className='secret-status unset';
+  document.getElementById('opp-secret-status').textContent='⏳ Waiting for opponent…';
+  document.getElementById('opp-secret-status').className='secret-status unset';
+  goTo('setup-screen');
+}
 
-  document.getElementById('setup-range').textContent = `${game.range.min} – ${game.range.max}`;
-  document.getElementById('setup-p1-name').textContent = game.p1.name;
-  document.getElementById('setup-p2-name').textContent = game.p2.name;
+function setMySecret(){
+  const val = parseInt(document.getElementById('my-secret-input').value);
+  if(isNaN(val)||val<gm.range.min||val>gm.range.max){
+    alert(`Enter a number between ${gm.range.min} and ${gm.range.max}`); return;
+  }
 
-  // Only show relevant input
-  if (state.myPlayerIndex === 1) {
-    document.getElementById('p2-setup-area').style.opacity = '0.4';
-    document.getElementById('p2-setup-area').style.pointerEvents = 'none';
+  if(me.role==='host'){
+    gm.p1.secret = val;
+    // Notify guest host is set
+    sendToGuest({type:'OPP_SECRET_READY'});
+    checkBothSecretsSet();
   } else {
-    document.getElementById('p1-setup-area').style.opacity = '0.4';
-    document.getElementById('p1-setup-area').style.pointerEvents = 'none';
+    gm.p2.secret = val;
+    // Send secret to host for game logic
+    sendToHost({type:'SECRET_READY', secret:val});
   }
 
-  showScreen('setup-screen');
-  startPolling('setup', state.currentRoom);
+  document.getElementById('my-secret-input').disabled=true;
+  document.getElementById('btn-set-secret').disabled=true;
+  document.getElementById('my-secret-status').textContent='✅ Secret set!';
+  document.getElementById('my-secret-status').className='secret-status set';
+  playSound('set');
 }
 
-function setSecret(playerNum) {
-  const room = getRoom(state.currentRoom);
-  const val = parseInt(document.getElementById(`p${playerNum}-secret-input`).value);
-  if (isNaN(val) || val < game.range.min || val > game.range.max) {
-    alert(`Enter a number between ${game.range.min} and ${game.range.max}`);
-    return;
-  }
-  if (playerNum !== state.myPlayerIndex) {
-    alert("That's not your slot!");
-    return;
-  }
-  if (playerNum === 1) { room.p1Secret = val; game.p1.secret = val; }
-  else                 { room.p2Secret = val; game.p2.secret = val; }
-  setRoom(state.currentRoom, room);
-
-  document.getElementById(`p${playerNum}-secret-status`).textContent = '✅ Secret set!';
-  document.getElementById(`p${playerNum}-secret-status`).className = 'secret-status set';
-  document.getElementById(`p${playerNum}-secret-input`).disabled = true;
-  playSound('set');
-
-  // Check if both set
-  if (room.p1Secret !== null && room.p2Secret !== null) {
-    syncFromRoom(room);
+function checkBothSecretsSet(){
+  // Only host runs this
+  if(me.role!=='host') return;
+  if(gm.p1.secret!==null && gm.p2.secret!==null){
+    gm.currentTurn=1; gm.p1.guesses=[]; gm.p2.guesses=[];
+    sendToGuest({type:'BEGIN_GAME', currentTurn:1});
     beginGame();
   }
 }
 
-function syncFromRoom(room) {
-  game.p1.name = room.hostName;
-  game.p2.name = room.guestName;
-  game.range = {min: room.min, max: room.max};
-  if (room.p1Secret !== null) game.p1.secret = room.p1Secret;
-  if (room.p2Secret !== null) game.p2.secret = room.p2Secret;
-}
-
-function syncGameFromRoom(room) {
-  game.p1.guesses = room.p1Guesses || [];
-  game.p2.guesses = room.p2Guesses || [];
-  game.currentTurn = room.currentTurn;
-}
-
-// ══════════════════════════════════════════════
-// BEGIN GAME
-// ══════════════════════════════════════════════
-function beginGame() {
-  clearInterval(pollInterval);
-  game.currentTurn = 1;
-  game.p1.guesses = [];
-  game.p2.guesses = [];
+// ═══════════════════════════════════════════════════════
+// GAME
+// ═══════════════════════════════════════════════════════
+function beginGame(){
+  // Show the player's own secret number in the badge
+  const mySecret = me.playerIndex === 1 ? gm.p1.secret : gm.p2.secret;
+  document.getElementById('my-number-display').textContent = mySecret !== null ? mySecret : '—';
   renderGameScreen();
-  showScreen('game-screen');
+  goTo('game-screen');
   playSound('start');
-  startPolling('game', state.currentRoom);
 }
 
-function renderGameScreen() {
-  const room = getRoom(state.currentRoom);
-  if (room) syncGameFromRoom(room);
-
-  const isMyTurn = game.currentTurn === state.myPlayerIndex;
-
-  document.getElementById('game-range-badge').textContent = `Range: ${game.range.min}–${game.range.max}`;
-  document.getElementById('p1-display-name').textContent = game.p1.name;
-  document.getElementById('p2-display-name').textContent = game.p2.name;
-
-  // Panels active state
-  document.getElementById('p1-panel').classList.toggle('active-turn', game.currentTurn === 1);
-  document.getElementById('p2-panel').classList.toggle('active-turn', game.currentTurn === 2);
-
-  // Turn indicator
-  const currentPlayer = game.currentTurn === 1 ? game.p1.name : game.p2.name;
-  document.getElementById('turn-indicator').textContent = isMyTurn ? 'YOUR TURN' : `${currentPlayer}'S TURN`;
-
-  // AZ prompt
-  const guesserName = game.currentTurn === 1 ? game.p1.name : game.p2.name;
-  const opponentName = game.currentTurn === 1 ? game.p2.name : game.p1.name;
-  document.getElementById('az-whose-turn').textContent = guesserName;
-  document.getElementById('az-opponent').textContent = opponentName;
-
-  const actionZone = document.querySelector('.action-zone');
-  if (isMyTurn) {
-    actionZone.style.opacity = '1'; actionZone.style.pointerEvents = 'all';
-    document.getElementById('guess-input').focus();
-  } else {
-    actionZone.style.opacity = '0.4'; actionZone.style.pointerEvents = 'none';
-  }
-
-  // Guess history chips
-  renderGuessChips('p1-guess-list', game.p1.guesses);
-  renderGuessChips('p2-guess-list', game.p2.guesses);
-
-  // Secret numbers — show if it's revealed (opponent can see you guessing theirs)
-  // p1 sees p2's secret only if p2 was guessed correctly (game over already)
-  // Otherwise keep hidden
-  document.getElementById('p1-secret-display').textContent = '???';
-  document.getElementById('p1-secret-display').className = 'pp-secret hidden';
-  document.getElementById('p2-secret-display').textContent = '???';
-  document.getElementById('p2-secret-display').className = 'pp-secret hidden';
+function renderGameScreen(){
+  const isMyTurn = gm.currentTurn === me.playerIndex;
+  document.getElementById('game-range-badge').textContent=`Range: ${gm.range.min}–${gm.range.max}`;
+  document.getElementById('p1-display-name').textContent=gm.p1.name;
+  document.getElementById('p2-display-name').textContent=gm.p2.name;
+  document.getElementById('p1-panel').classList.toggle('active-turn', gm.currentTurn===1);
+  document.getElementById('p2-panel').classList.toggle('active-turn', gm.currentTurn===2);
+  const curName = gm.currentTurn===1 ? gm.p1.name : gm.p2.name;
+  const oppName = gm.currentTurn===1 ? gm.p2.name : gm.p1.name;
+  document.getElementById('turn-indicator').textContent = isMyTurn ? 'YOUR TURN' : `${curName}'S TURN`;
+  document.getElementById('az-whose-turn').textContent = curName;
+  document.getElementById('az-opponent').textContent = oppName;
+  const az = document.querySelector('.action-zone');
+  az.style.opacity = isMyTurn?'1':'0.4';
+  az.style.pointerEvents = isMyTurn?'all':'none';
+  if(isMyTurn) document.getElementById('guess-input').focus();
+  renderGuessChips('p1-guess-list', gm.p1.guesses);
+  renderGuessChips('p2-guess-list', gm.p2.guesses);
+  document.getElementById('p1-secret-display').textContent='???';
+  document.getElementById('p1-secret-display').className='pp-secret hidden';
+  document.getElementById('p2-secret-display').textContent='???';
+  document.getElementById('p2-secret-display').className='pp-secret hidden';
 }
 
-function renderGuessChips(listId, guesses) {
-  const el = document.getElementById(listId);
-  el.innerHTML = '';
-  guesses.forEach(g => {
-    const chip = document.createElement('div');
-    chip.className = `gh-chip ${g.result}`;
-    chip.textContent = g.num + (g.result === 'high' ? '↑' : g.result === 'low' ? '↓' : '✓');
-    el.appendChild(chip);
+function renderGuessChips(listId, guesses){
+  const el=document.getElementById(listId); el.innerHTML='';
+  guesses.forEach(g=>{
+    const c=document.createElement('div');
+    c.className=`gh-chip ${g.result}`;
+    c.textContent=g.num+(g.result==='high'?'↑':g.result==='low'?'↓':'✓');
+    el.appendChild(c);
   });
 }
 
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SUBMIT GUESS
-// ══════════════════════════════════════════════
-function submitGuess() {
-  if (game.currentTurn !== state.myPlayerIndex) return;
-
-  const input = document.getElementById('guess-input');
-  const guess = parseInt(input.value);
-  if (isNaN(guess) || guess < game.range.min || guess > game.range.max) {
-    shake('guess-input');
-    return;
+// ═══════════════════════════════════════════════════════
+function submitGuess(){
+  if(gm.currentTurn!==me.playerIndex) return;
+  const input=document.getElementById('guess-input');
+  const val=parseInt(input.value);
+  if(isNaN(val)||val<gm.range.min||val>gm.range.max){ shake('guess-input'); return; }
+  input.value='';
+  if(me.role==='host'){
+    processGuess(1, val);
+  } else {
+    sendToHost({type:'GUESS', value:val});
   }
-  input.value = '';
-
-  const room = getRoom(state.currentRoom);
-  if (!room) return;
-
-  // Whose secret are we guessing?
-  const opponentSecret = game.currentTurn === 1 ? (room.p2Secret ?? game.p2.secret) : (room.p1Secret ?? game.p1.secret);
-  const guesserKey = game.currentTurn === 1 ? 'p1Guesses' : 'p2Guesses';
-
-  let result = '';
-  if (guess === opponentSecret) result = 'win';
-  else if (guess > opponentSecret) result = 'low';   // guess too high → secret is lower
-  else result = 'high';                               // guess too low  → secret is higher
-
-  room[guesserKey] = room[guesserKey] || [];
-  room[guesserKey].push({num: guess, result});
-
-  if (result === 'win') {
-    room.winner = game.currentTurn === 1 ? 'p1' : 'p2';
-    setRoom(state.currentRoom, room);
-    syncGameFromRoom(room);
-    triggerWinnerReveal(room);
-    return;
-  }
-
-  // Switch turn
-  room.currentTurn = game.currentTurn === 1 ? 2 : 1;
-  setRoom(state.currentRoom, room);
-  syncGameFromRoom(room);
-
-  // Show alert
-  showAlert(result, guess);
-  setTimeout(() => renderGameScreen(), 200);
 }
 
-// ══════════════════════════════════════════════
-// ALERT ANIMATION
-// ══════════════════════════════════════════════
-function showAlert(type, num) {
-  const overlay = document.getElementById('alert-overlay');
-  const word = document.getElementById('alert-word');
-  word.className = `alert-word ${type}`;
-  word.textContent = type === 'high' ? 'HIGH' : 'LOW';
-  overlay.className = `show ${type}`;
+// HOST-ONLY: all guess logic lives here, then broadcast result
+function processGuess(playerIndex, guessNum){
+  const opponentSecret = playerIndex===1 ? gm.p2.secret : gm.p1.secret;
+  let result;
+  if(guessNum===opponentSecret)      result='win';
+  else if(guessNum>opponentSecret)   result='low';   // too high → secret is lower
+  else                               result='high';  // too low  → secret is higher
+
+  const pKey = playerIndex===1?'p1':'p2';
+  gm[pKey].guesses.push({num:guessNum, result});
+
+  if(result==='win'){
+    const winnerName = playerIndex===1 ? gm.p1.name : gm.p2.name;
+    const totalGuesses = gm.p1.guesses.length + gm.p2.guesses.length;
+    sendToGuest({type:'GAME_OVER', winnerName, totalGuesses, p1Secret:gm.p1.secret, p2Secret:gm.p2.secret});
+    showWinner(winnerName, totalGuesses, gm.p1.secret, gm.p2.secret);
+    return;
+  }
+
+  const nextTurn = playerIndex===1?2:1;
+  gm.currentTurn = nextTurn;
+
+  // Broadcast result to guest
+  sendToGuest({type:'GUESS_RESULT', playerIndex, guessNum, result, currentTurn:nextTurn});
+  showAlert(result);
+  renderGameScreen();
+}
+
+// ═══════════════════════════════════════════════════════
+// ALERT
+// ═══════════════════════════════════════════════════════
+function showAlert(type){
+  const overlay=document.getElementById('alert-overlay');
+  const word=document.getElementById('alert-word');
+  word.className=`alert-word ${type}`;
+  word.textContent=type==='high'?'HIGHER':'LOWER';
+  overlay.className=`show ${type}`;
   word.classList.add('animate');
   playSound(type);
-
-  setTimeout(() => {
-    overlay.className = '';
-    word.className = `alert-word ${type}`;
-  }, 1900);
+  setTimeout(()=>{ overlay.className=''; word.className=`alert-word ${type}`; }, 1900);
 }
 
-function triggerWinnerReveal(room) {
-  clearInterval(pollInterval);
-  const winnerName = room.winner === 'p1' ? game.p1.name : game.p2.name;
-  syncGameFromRoom(room);
-  showWinner(winnerName, room);
-}
-
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // WINNER
-// ══════════════════════════════════════════════
-function showWinner(winnerName, room) {
+// ═══════════════════════════════════════════════════════
+function showWinner(winnerName, totalGuesses, p1Secret, p2Secret){
   document.getElementById('winner-name').textContent = winnerName;
-  document.getElementById('winner-reveal').innerHTML = `
-    🔒 <strong style="color:var(--accent)">${game.p1.name}</strong>'s secret was <span>${room.p1Secret ?? game.p1.secret}</span><br>
-    🔒 <strong style="color:var(--accent2)">${game.p2.name}</strong>'s secret was <span>${room.p2Secret ?? game.p2.secret}</span><br><br>
-    Total guesses: ${(room.p1Guesses||[]).length + (room.p2Guesses||[]).length}
-  `;
-  showScreen('winner-screen');
+
+  // ── compute per-player stats ──
+  const p1g = gm.p1.guesses; // {num, result:'high'|'low'|'win'}
+  const p2g = gm.p2.guesses;
+
+  function countResult(arr, type){ return arr.filter(g=>g.result===type).length; }
+
+  const p1Won = winnerName === gm.p1.name;
+  const p2Won = winnerName === gm.p2.name;
+
+  // Summary row
+  document.getElementById('stat-total-guesses').textContent = totalGuesses;
+  document.getElementById('stat-p1-guesses').textContent    = p1g.length;
+  document.getElementById('stat-p2-guesses').textContent    = p2g.length;
+
+  // P1 card
+  document.getElementById('stat-p1-name').textContent    = gm.p1.name;
+  document.getElementById('stat-p1-secret').textContent  = p1Secret;
+  document.getElementById('stat-p1-count').textContent   = p1g.length;
+  document.getElementById('stat-p1-correct').textContent = countResult(p1g,'win');
+  document.getElementById('stat-p1-high').textContent    = countResult(p1g,'high');
+  document.getElementById('stat-p1-low').textContent     = countResult(p1g,'low');
+  const p1Result = document.getElementById('stat-p1-result');
+  p1Result.textContent  = p1Won ? '🏆 WINNER' : '💀 LOST';
+  p1Result.className    = 'sc-row-val ' + (p1Won ? 'good' : 'bad');
+  if(p1Won) document.getElementById('stat-card-p1').classList.add('winner-card-stat');
+
+  // P2 card
+  document.getElementById('stat-p2-name').textContent    = gm.p2.name;
+  document.getElementById('stat-p2-secret').textContent  = p2Secret;
+  document.getElementById('stat-p2-count').textContent   = p2g.length;
+  document.getElementById('stat-p2-correct').textContent = countResult(p2g,'win');
+  document.getElementById('stat-p2-high').textContent    = countResult(p2g,'high');
+  document.getElementById('stat-p2-low').textContent     = countResult(p2g,'low');
+  const p2Result = document.getElementById('stat-p2-result');
+  p2Result.textContent  = p2Won ? '🏆 WINNER' : '💀 LOST';
+  p2Result.className    = 'sc-row-val ' + (p2Won ? 'good' : 'bad');
+  if(p2Won) document.getElementById('stat-card-p2').classList.add('winner-card-stat');
+
+  goTo('winner-screen');
   playSound('win');
   launchConfetti();
 }
 
-function launchConfetti() {
-  const colors = ['#00d4ff','#7b2fff','#ffd700','#ff2d55','#00ff88','#fff'];
-  for (let i = 0; i < 80; i++) {
-    setTimeout(() => {
-      const el = document.createElement('div');
-      el.className = 'confetti-piece';
-      el.style.cssText = `
-        left:${Math.random()*100}vw;
-        width:${6+Math.random()*8}px;
-        height:${6+Math.random()*8}px;
-        background:${colors[Math.floor(Math.random()*colors.length)]};
-        border-radius:${Math.random()>0.5?'50%':'2px'};
-        animation-duration:${2+Math.random()*2}s;
-        animation-delay:${Math.random()*0.5}s;
-        top:-20px;
-      `;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 5000);
-    }, i * 40);
-  }
+function playAgain(){
+  resetForPlayAgain();
+  // Tell other player
+  if(me.role==='host') sendToGuest({type:'PLAY_AGAIN'});
+  else                 sendToHost ({type:'PLAY_AGAIN'});
 }
 
-function resetGame() {
-  clearInterval(pollInterval);
-
-  // Keep the same room, players and range — just reset secrets, guesses, turn
-  const code = state.currentRoom;
-  if (code) {
-    const room = getRoom(code);
-    if (room) {
-      room.p1Secret = null;
-      room.p2Secret = null;
-      room.p1Guesses = [];
-      room.p2Guesses = [];
-      room.currentTurn = 1;
-      room.winner = null;
-      room.gameStarted = true;
-      setRoom(code, room);
-    }
-  }
-
-  // Reset game object but keep names and range
-  game.p1.secret = null; game.p1.guesses = [];
-  game.p2.secret = null; game.p2.guesses = [];
-  game.currentTurn = 1;
-
-  // Re-enable secret inputs
-  ['p1','p2'].forEach(p => {
-    const inp = document.getElementById(`${p}-secret-input`);
-    if (inp) { inp.value = ''; inp.disabled = false; }
-    const status = document.getElementById(`${p}-secret-status`);
-    if (status) { status.textContent = '⏳ Not set yet'; status.className = 'secret-status unset'; }
-  });
-  document.getElementById('begin-game-btn').style.display = 'none';
-
-  // Re-enable pointer events on both setup areas
-  ['p1-setup-area','p2-setup-area'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.style.opacity = '1'; el.style.pointerEvents = 'all'; }
-  });
-
-  // Dim the non-player area again
-  if (state.myPlayerIndex === 1) {
-    document.getElementById('p2-setup-area').style.opacity = '0.4';
-    document.getElementById('p2-setup-area').style.pointerEvents = 'none';
-  } else {
-    document.getElementById('p1-setup-area').style.opacity = '0.4';
-    document.getElementById('p1-setup-area').style.pointerEvents = 'none';
-  }
-
-  showScreen('setup-screen');
-  startPolling('setup', code);
+function resetForPlayAgain(){
+  gm.p1.secret=null; gm.p1.guesses=[];
+  gm.p2.secret=null; gm.p2.guesses=[];
+  gm.currentTurn=1;
+  // Reset winner highlight classes
+  document.getElementById('stat-card-p1').classList.remove('winner-card-stat');
+  document.getElementById('stat-card-p2').classList.remove('winner-card-stat');
+  showSetupScreen();
 }
 
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SEND HELPERS
+// ═══════════════════════════════════════════════════════
+function sendToGuest(data){ if(guestConn && guestConn.open) try{ guestConn.send(data); }catch(e){} }
+function sendToHost (data){ if(hostConn  && hostConn.open)  try{ hostConn.send(data);  }catch(e){} }
+
+// ═══════════════════════════════════════════════════════
 // SOUND ENGINE
-// ══════════════════════════════════════════════
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
-
-function getAudioCtx() {
-  if (!audioCtx) audioCtx = new AudioCtx();
-  return audioCtx;
+// ═══════════════════════════════════════════════════════
+let audioCtx=null;
+function getAC(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+function playSound(type){
+  try{
+    const ctx=getAC(); const now=ctx.currentTime;
+    if(type==='high'){
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination); o.type='sawtooth';
+      o.frequency.setValueAtTime(440,now); o.frequency.linearRampToValueAtTime(880,now+.15);
+      g.gain.setValueAtTime(.3,now); g.gain.exponentialRampToValueAtTime(.001,now+.4);
+      o.start(now); o.stop(now+.4);
+    } else if(type==='low'){
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination); o.type='triangle';
+      o.frequency.setValueAtTime(330,now); o.frequency.linearRampToValueAtTime(165,now+.3);
+      g.gain.setValueAtTime(.25,now); g.gain.exponentialRampToValueAtTime(.001,now+.5);
+      o.start(now); o.stop(now+.5);
+    } else if(type==='set'||type==='join'){
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination); o.type='sine'; o.frequency.value=type==='join'?880:523;
+      g.gain.setValueAtTime(.2,now); g.gain.exponentialRampToValueAtTime(.001,now+.4);
+      o.start(now); o.stop(now+.4);
+    } else if(type==='start'){
+      [523,659,784,1047].forEach((f,i)=>{ const o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g);g.connect(ctx.destination); o.type='sine'; o.frequency.value=f; g.gain.setValueAtTime(0,now+i*.12); g.gain.linearRampToValueAtTime(.2,now+i*.12+.05); g.gain.exponentialRampToValueAtTime(.001,now+i*.12+.25); o.start(now+i*.12); o.stop(now+i*.12+.25); });
+    } else if(type==='win'){
+      [523,659,784,1047,1319,1568].forEach((f,i)=>{ const o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g);g.connect(ctx.destination); o.type='triangle'; o.frequency.value=f; g.gain.setValueAtTime(0,now+i*.1); g.gain.linearRampToValueAtTime(.3,now+i*.1+.05); g.gain.exponentialRampToValueAtTime(.001,now+i*.1+.4); o.start(now+i*.1); o.stop(now+i*.1+.5); });
+    }
+  }catch(e){}
 }
 
-function playSound(type) {
-  try {
-    const ctx = getAudioCtx();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-
-    if (type === 'high') {
-      // Alarm-like ascending beep
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.linearRampToValueAtTime(880, now + 0.15);
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.start(now); osc.stop(now + 0.4);
-      // Second beep
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.connect(gain2); gain2.connect(ctx.destination);
-      osc2.type = 'sawtooth'; osc2.frequency.value = 880;
-      gain2.gain.setValueAtTime(0.3, now+0.2);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now+0.5);
-      osc2.start(now+0.2); osc2.stop(now+0.5);
-    } else if (type === 'low') {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(330, now);
-      osc.frequency.linearRampToValueAtTime(165, now + 0.3);
-      gain.gain.setValueAtTime(0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-      osc.start(now); osc.stop(now + 0.5);
-    } else if (type === 'set') {
-      osc.type = 'sine'; osc.frequency.value = 523;
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      osc.start(now); osc.stop(now + 0.3);
-    } else if (type === 'join') {
-      osc.type = 'sine'; osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.start(now); osc.stop(now + 0.4);
-    } else if (type === 'start') {
-      [523, 659, 784, 1047].forEach((f, i) => {
-        const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination);
-        o.type = 'sine'; o.frequency.value = f;
-        g.gain.setValueAtTime(0, now + i*0.12);
-        g.gain.linearRampToValueAtTime(0.2, now + i*0.12 + 0.05);
-        g.gain.exponentialRampToValueAtTime(0.001, now + i*0.12 + 0.25);
-        o.start(now + i*0.12); o.stop(now + i*0.12 + 0.25);
-      });
-      return;
-    } else if (type === 'win') {
-      const fanfare = [523,659,784,1047,1319,1568];
-      fanfare.forEach((f, i) => {
-        const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination);
-        o.type = 'triangle'; o.frequency.value = f;
-        g.gain.setValueAtTime(0, now + i*0.1);
-        g.gain.linearRampToValueAtTime(0.3, now + i*0.1 + 0.05);
-        g.gain.exponentialRampToValueAtTime(0.001, now + i*0.1 + 0.4);
-        o.start(now + i*0.1); o.stop(now + i*0.1 + 0.5);
-      });
-      return;
-    }
-  } catch(e) {}
+// ═══════════════════════════════════════════════════════
+// CONFETTI
+// ═══════════════════════════════════════════════════════
+function launchConfetti(){
+  const cols=['#00d4ff','#7b2fff','#ffd700','#ff2d55','#00ff88','#fff'];
+  for(let i=0;i<80;i++) setTimeout(()=>{
+    const el=document.createElement('div'); el.className='confetti-piece';
+    el.style.cssText=`left:${Math.random()*100}vw;width:${6+Math.random()*8}px;height:${6+Math.random()*8}px;background:${cols[Math.floor(Math.random()*cols.length)]};border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*.5}s;top:-20px;`;
+    document.body.appendChild(el); setTimeout(()=>el.remove(),5000);
+  },i*40);
 }
 
-
-
-// ══════════════════════════════════════════════
-// CROSS-TAB STORAGE EVENT (instant sync on room change)
-// ══════════════════════════════════════════════
-window.addEventListener('storage', (e) => {
-  if (!e.key || !e.key.startsWith('numduel_room_')) return;
-  const code = e.key.replace('numduel_room_', '');
-  if (code !== state.currentRoom) return;
-  // Force the polling logic to fire immediately
-  // (the interval will pick it up on next tick anyway, but this is faster)
-  if (pollInterval) clearInterval(pollInterval);
-  const room = getRoom(code);
-  if (!room) return;
-  const mode = window._currentPollMode || '';
-  if (mode === 'waiting' && room.guestJoined) {
-    if (!document.getElementById('ws-player2-joined').style.display.includes('block')) {
-      document.getElementById('ws-player2-joined').style.display = 'block';
-      document.getElementById('ws-p2-name').textContent = room.guestName;
-      game.p2.name = room.guestName;
-      playSound('join');
-    }
-  }
-  if (mode === 'joined-waiting' && room.gameStarted) {
-    syncFromRoom(room);
-    showSetupScreen();
-    return;
-  }
-  if ((mode === 'setup' || mode === 'waiting-setup') && room.p1Secret !== null && room.p2Secret !== null) {
-    syncFromRoom(room);
-    beginGame();
-    return;
-  }
-  if (mode === 'game') {
-    syncGameFromRoom(room);
-    if (room.winner) {
-      showWinner(room.winner === 'p1' ? game.p1.name : game.p2.name, room);
-      return;
-    }
-    renderGameScreen();
-  }
-  // Restart polling
-  if (mode) startPolling(mode, code);
-});
-
-// ══════════════════════════════════════════════
-// BACKGROUND NUMBER ANIMATION
-// ══════════════════════════════════════════════
-(function() {
-  const canvas = document.getElementById('bg-canvas');
-  const ctx = canvas.getContext('2d');
-  let W, H, particles = [];
-
-  function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resize); resize();
-
-  function makeParticle() {
-    return {
-      x: Math.random() * W,
-      y: Math.random() * H,
-      vy: 0.3 + Math.random() * 0.8,
-      val: Math.floor(Math.random() * 999),
-      size: 10 + Math.random() * 14,
-      opacity: 0.1 + Math.random() * 0.5,
-      color: Math.random() > 0.5 ? '#00d4ff' : '#7b2fff',
-    };
-  }
-
-  for (let i = 0; i < 80; i++) particles.push(makeParticle());
-
-  function draw() {
+// ═══════════════════════════════════════════════════════
+// BACKGROUND ANIMATION
+// ═══════════════════════════════════════════════════════
+(function(){
+  const canvas=document.getElementById('bg-canvas'), ctx=canvas.getContext('2d');
+  let W,H,pts=[];
+  function resize(){ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; }
+  window.addEventListener('resize',resize); resize();
+  function mkp(){ return {x:Math.random()*W,y:Math.random()*H,vy:.3+Math.random()*.8,val:Math.floor(Math.random()*999),size:10+Math.random()*14,opacity:.1+Math.random()*.5,color:Math.random()>.5?'#00d4ff':'#7b2fff'}; }
+  for(let i=0;i<80;i++) pts.push(mkp());
+  function draw(){
     ctx.clearRect(0,0,W,H);
-    ctx.font = '600 14px "Space Mono"';
-    particles.forEach(p => {
-      ctx.globalAlpha = p.opacity;
-      ctx.fillStyle = p.color;
-      ctx.font = `700 ${p.size}px "Orbitron"`;
-      ctx.fillText(p.val, p.x, p.y);
-      p.y += p.vy;
-      p.val = (p.val + 1) % 1000;
-      if (p.y > H + 30) { Object.assign(p, makeParticle()); p.y = -30; }
-    });
-    ctx.globalAlpha = 1;
-    requestAnimationFrame(draw);
+    pts.forEach(p=>{ ctx.globalAlpha=p.opacity; ctx.fillStyle=p.color; ctx.font=`700 ${p.size}px Orbitron`; ctx.fillText(p.val,p.x,p.y); p.y+=p.vy; p.val=(p.val+1)%1000; if(p.y>H+30){ Object.assign(p,mkp()); p.y=-30; } });
+    ctx.globalAlpha=1; requestAnimationFrame(draw);
   }
   draw();
 })();
 
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // UTILS
-// ══════════════════════════════════════════════
-function shake(id) {
-  const el = document.getElementById(id);
-  el.style.animation = 'none';
-  el.style.borderColor = 'var(--red)';
-  setTimeout(() => {
-    el.style.animation = 'shake 0.4s ease';
-    setTimeout(() => { el.style.animation = ''; el.style.borderColor = ''; }, 450);
-  }, 10);
+// ═══════════════════════════════════════════════════════
+function shake(id){
+  const el=document.getElementById(id);
+  el.style.borderColor='var(--red)';
+  el.animate([{transform:'translateX(-8px)'},{transform:'translateX(8px)'},{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:400,easing:'ease'})
+    .onfinish=()=>{ el.style.borderColor=''; };
 }
-
-// Inject shake keyframe
-const style = document.createElement('style');
-style.textContent = `@keyframes shake {
-  0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(6px)}
-}`;
-document.head.appendChild(style);
 </script>
 </body>
 </html>
